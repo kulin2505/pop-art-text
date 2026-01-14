@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>波普圆点文字生成器 | Pop Art Dot Text</title>
+    
+    <!-- 社交分享元数据 (Open Graph) -->
+    <meta property="og:title" content="波普圆点文字生成器">
+    <meta property="og:description" content="输入文字，生成酷炫的彩色圆点粒子效果！快来试试物理互动吧。">
+    <meta property="og:image" content="https://cdn.dribbble.com/users/1/screenshots/1/pop-art.png"> <!-- 这是一个示例占位图 -->
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f8f8f8;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            touch-action: none;
+        }
+
+        #canvas1 {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: #ffffff;
+        }
+
+        /* 控制面板样式 */
+        .controls-panel {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 100;
+        }
+
+        /* 自定义滑块 */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+            margin-top: -6px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #ddd;
+            border-radius: 2px;
+        }
+
+        /* 移动端优化：底部面板 */
+        @media (max-width: 640px) {
+            .controls-panel {
+                bottom: 0;
+                top: auto;
+                left: 0;
+                width: 100%;
+                border-radius: 24px 24px 0 0;
+                transform: translateY(0);
+                padding-bottom: 30px; 
+                /* 适配 iPhone 底部横条 */
+                padding-bottom: max(30px, env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 控制面板 -->
+    <div class="controls-panel fixed top-6 left-1/2 transform -translate-x-1/2 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-[95%] sm:w-auto max-w-3xl">
+        
+        <!-- 输入框 -->
+        <div class="flex flex-col items-center w-full sm:w-auto">
+            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">文字 (Text)</label>
+            <input type="text" id="textInput" value="OPEN" maxlength="8" 
+                   class="w-full sm:w-32 text-center bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-lg font-black text-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all uppercase placeholder-gray-300">
+        </div>
+
+        <!-- 调节滑块组 -->
+        <div class="flex gap-4 w-full sm:w-auto">
+            <div class="flex flex-col w-1/2 sm:w-32">
+                <div class="flex justify-between mb-1">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">大小</label>
+                    <span id="sizeVal" class="text-[10px] font-bold text-gray-600">9</span>
+                </div>
+                <input type="range" id="sizeRange" min="2" max="25" value="9" class="w-full">
+            </div>
+
+            <div class="flex flex-col w-1/2 sm:w-32">
+                <div class="flex justify-between mb-1">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">密度</label>
+                    <span id="gapVal" class="text-[10px] font-bold text-gray-600">10</span>
+                </div>
+                <input type="range" id="gapRange" min="4" max="20" value="10" class="w-full">
+            </div>
+        </div>
+
+        <!-- 按钮组 -->
+        <div class="flex gap-2 w-full sm:w-auto">
+            <button onclick="init()" 
+                    class="flex-1 sm:flex-none bg-black hover:bg-gray-800 text-white font-bold py-2 px-5 rounded-xl shadow-lg transform active:scale-95 transition-all text-sm">
+                刷新
+            </button>
+            <button onclick="saveImage()" 
+                    class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-xl shadow-lg transform active:scale-95 transition-all text-sm flex items-center justify-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                保存
+            </button>
+        </div>
+    </div>
+
+    <!-- 提示语 -->
+    <div class="fixed top-24 sm:bottom-4 sm:top-auto left-0 w-full text-center pointer-events-none opacity-40 z-0">
+        <p class="text-xs text-gray-500 font-medium">✨ 触摸/鼠标滑动打散圆点 ✨</p>
+    </div>
+
+    <canvas id="canvas1"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas1');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        let particleArray = [];
+        
+        // 配色方案
+        const colors = [
+            '#000000', '#1D4ED8', '#16A34A', '#FACC15', '#EC4899', '#F97316', '#7C3AED'
+        ];
+
+        const mouse = { x: null, y: null, radius: 100 };
+
+        // 事件监听
+        window.addEventListener('mousemove', e => { mouse.x = e.x; mouse.y = e.y; });
+        window.addEventListener('mouseout', () => { mouse.x = undefined; mouse.y = undefined; });
+        
+        // 移动端事件
+        window.addEventListener('touchmove', e => {
+            e.preventDefault();
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        }, {passive: false});
+
+        window.addEventListener('touchstart', e => {
+             mouse.x = e.touches[0].clientX;
+             mouse.y = e.touches[0].clientY;
+             mouse.radius = 150;
+        });
+
+        window.addEventListener('touchend', () => { mouse.x = undefined; mouse.y = undefined; });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            init();
+        });
+
+        // 控件绑定
+        const sizeRange = document.getElementById('sizeRange');
+        const gapRange = document.getElementById('gapRange');
+        const sizeVal = document.getElementById('sizeVal');
+        const gapVal = document.getElementById('gapVal');
+
+        sizeRange.addEventListener('input', () => { sizeVal.innerText = sizeRange.value; });
+        gapRange.addEventListener('input', () => { gapVal.innerText = gapRange.value; });
+        
+        let timeout;
+        [sizeRange, gapRange, document.getElementById('textInput')].forEach(el => {
+            el.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(init, 100);
+            });
+        });
+
+        // 保存图片功能
+        function saveImage() {
+            // 创建一个临时 Canvas 以绘制白色背景（否则保存出来是透明的）
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            // 填充白色背景
+            tempCtx.fillStyle = '#ffffff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // 把当前画面画上去
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // 导出
+            const link = document.createElement('a');
+            link.download = `pop-art-${Date.now()}.png`;
+            link.href = tempCanvas.toDataURL();
+            link.click();
+        }
+
+        class Particle {
+            constructor(x, y, size, color){
+                this.x = x;
+                this.y = y;
+                this.baseX = x;
+                this.baseY = y;
+                this.size = size;
+                this.color = color;
+                this.density = (Math.random() * 30) + 5; 
+            }
+            
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            update() {
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let distance = Math.sqrt(dx*dx + dy*dy);
+                let forceDirectionX = dx / distance;
+                let forceDirectionY = dy / distance;
+                let maxDistance = mouse.radius;
+                let force = (maxDistance - distance) / maxDistance;
+                let directionX = forceDirectionX * force * this.density;
+                let directionY = forceDirectionY * force * this.density;
+
+                if (distance < mouse.radius) {
+                    this.x -= directionX;
+                    this.y -= directionY;
+                } else {
+                    if (this.x !== this.baseX) {
+                        let dx = this.x - this.baseX;
+                        this.x -= dx / 15;
+                    }
+                    if (this.y !== this.baseY) {
+                        let dy = this.y - this.baseY;
+                        this.y -= dy / 15;
+                    }
+                }
+            }
+        }
+
+        function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            particleArray = [];
+            const textInput = document.getElementById('textInput').value.toUpperCase();
+            let sizeValue = parseInt(document.getElementById('sizeRange').value);
+            let gapValue = parseInt(document.getElementById('gapRange').value);
+            
+            if (gapValue < 3) gapValue = 3; 
+
+            ctx.fillStyle = 'white';
+            let fontSize = Math.min(canvas.width / (textInput.length * 0.7), canvas.height / 2);
+            fontSize = Math.min(fontSize, 400); 
+            if (fontSize < 60) fontSize = 60;   
+
+            ctx.font = `900 ${fontSize}px Arial, Helvetica, sans-serif`; 
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(textInput, canvas.width/2, canvas.height/2);
+
+            const textCoordinates = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            for (let y = 0; y < textCoordinates.height; y += gapValue) {
+                for (let x = 0; x < textCoordinates.width; x += gapValue) {
+                    const index = (y * 4 * textCoordinates.width) + (x * 4);
+                    if (textCoordinates.data[index + 3] > 128) {
+                        const color = colors[Math.floor(Math.random() * colors.length)];
+                        const jitter = (Math.random() - 0.5) * (gapValue * 0.6);
+                        let pSize = sizeValue + (Math.random() * 4 - 2);
+                        if (pSize < 2) pSize = 2;
+                        particleArray.push(new Particle(x + jitter, y + jitter, pSize, color));
+                    }
+                }
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function animate(){
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particleArray.length; i++){
+                particleArray[i].draw();
+                particleArray[i].update();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
+
